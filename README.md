@@ -10,21 +10,58 @@ Based on http://wiki.tcl.tk/15158
 
 [Documentation](http://moteus.github.io/ZipWriter)
 
-## Dependences ##
+## Dependencies ##
 
-- lzlib
-- struct
-- bit32 or bit
-- iconv (if not found then file names passed as is)
-- alien/ffi (on Windows detect system default codepage)
-- lunitx (only for test)
-- [AesFileEncrypt] (https://github.com/moteus/lua-AesFileEncrypt) (optional)
+### Core ###
+- [lzlib](https://luarocks.org/modules/hisham/lzlib) or [lua-zlib](https://luarocks.org/modules/brimworks/lua-zlib)
+- [struct](https://luarocks.org/modules/luarocks/struct) (only for Lua < 5.3)
+- [bit32](https://luarocks.org/modules/siffiejoe/bit32) (only for Lua = 5.1)
+
+### Optional ###
+- [iconv](https://luarocks.org/modules/luarocks/lua-iconv) (if not found then file names passed as is)
+- [alien](https://luarocks.org/modules/mascarenhas/alien) or [ffi](https://github.com/jmckaskill/luaffi)/[ffi](http://luajit.org/ext_ffi.html) (on Windows detect system default codepage)
+- [AesFileEncrypt](https://github.com/moteus/lua-AesFileEncrypt) or [LuaCrypto](https://luarocks.org/modules/luarocks/luacrypto)
+
+### Test ###
+- [lunitx](https://luarocks.org/modules/dougcurrie/lunitx)
+- [lbase64](https://luarocks.org/modules/ignacio/lbase64)
 
 ## Supports ##
 - write to non seekable stream
 - utf8 file names in archives (required iconv)
 - ZIP64 (does not use stream:seek())
- 
+
+## Install ##
+
+Since version 0.1.5 rockspec does not have any dependencies because there no way to specify
+them as optional. E.g. if you already have installed `lua-zlib` and you then install `lzlib` then
+your existed code may stop working. So you have to install appropriate library by hand.
+Also some dependencies need only for specific Lua version.
+
+- Install zlib binding
+```bash
+luarocks install lua-zlib
+```
+or
+```bash
+luarocks install lzlib
+```
+
+- Lua 5.1/5.2/JIT dependencies
+```bash
+luarocks install struct
+```
+
+- Lua 5.1 dependencies
+```bash
+luarocks install bit32
+```
+
+- Install ZipWriter itself
+```bash
+luarocks install zipwriter
+```
+
 ## Usage ##
 
 Make simple archive
