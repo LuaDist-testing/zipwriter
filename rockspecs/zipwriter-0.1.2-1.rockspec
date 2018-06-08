@@ -1,17 +1,9 @@
--- This file was automatically generated for the LuaDist project.
-
-package = "zipwriter"
+package = "ZipWriter"
 version = "0.1.2-1"
--- LuaDist source
 source = {
-  tag = "0.1.2-1",
-  url = "git://github.com/LuaDist-testing/zipwriter.git"
+  url = "https://github.com/moteus/ZipWriter/archive/v0.1.2.zip",
+  dir = "ZipWriter-0.1.2",
 }
--- Original source
--- source = {
---   url = "https://github.com/moteus/ZipWriter/archive/v0.1.2.zip",
---   dir = "ZipWriter-0.1.2",
--- }
 
 description = {
   summary = "Library for creating ZIP archive for Lua 5.1/5.2",
@@ -53,3 +45,6 @@ build = {
     ["ZipWriter.encrypt.aes"]      = "lua/ZipWriter/encrypt/aes.lua",
   }
 }
+
+
+

@@ -1,14 +1,66 @@
----
--- @module ZipWriter
+--- Create zip archives.
+--
 -- Based on http://wiki.tcl.tk/15158
+--
+-- @module ZipWriter
+--
+-- @usage
+-- local ZipWriter = require "ZipWriter"
+--
+-- local function make_reader(fname)
+--   local f = assert(io.open(fname, 'rb'))
+--   local chunk_size = 1024
+--   local desc = { -- `-rw-r-----` on Unix
+--     istext   = true,
+--     isfile   = true,
+--     isdir    = false,
+--     mtime    = 1348048902, -- lfs.attributes('modification') 
+--     platform = 'unix',
+--     exattrib = {
+--       ZipWriter.NIX_FILE_ATTR.IFREG,
+--       ZipWriter.NIX_FILE_ATTR.IRUSR,
+--       ZipWriter.NIX_FILE_ATTR.IWUSR,
+--       ZipWriter.NIX_FILE_ATTR.IRGRP,
+--       ZipWriter.DOS_FILE_ATTR.ARCH,
+--     },
+--   }
+--   return desc, desc.isfile and function()
+--     local chunk = f:read(chunk_size)
+--     if chunk then return chunk end
+--     f:close()
+--   end
+-- end
+-- 
+-- ZipStream = ZipWriter.new()
+-- ZipStream:open_stream( assert(io.open('readme.zip', 'w+b')), true )
+-- ZipStream:write('README.md', make_reader('README.md'))
+-- ZipStream:close()
+--
+-- @usage
+-- -- Make encrypted archive
+-- local ZipWriter  = require"ZipWriter"
+-- local AesEncrypt = require"ZipWriter.encrypt.aes"
+-- 
+-- ZipStream = ZipWriter.new{
+--   encrypt = AesEncrypt.new('password')
+-- }
+-- 
+-- -- as before
+--
 
 local zlib             = require "zlib"
 local utils            = require "ZipWriter.utils"
 local stream_converter = require "ZipWriter.binary_converter"
 local bit              = utils.bit
 
+local ZLIB_NO_COMPRESSION      = zlib.NO_COMPRESSION       or  0
+local ZLIB_BEST_SPEED          = zlib.BEST_SPEED           or  1
+local ZLIB_BEST_COMPRESSION    = zlib.BEST_COMPRESSION     or  9
+local ZLIB_DEFAULT_COMPRESSION = zlib.DEFAULT_COMPRESSION  or -1
+
 local sc = stream_converter
 
+local unpack = unpack or table.unpack
 local stdout = io.stdout
 local fmt = string.format
 local function dump_byte(data, n)
@@ -18,6 +70,18 @@ local function dump_byte(data, n)
     if i == 16 then stdout:write('\n') end
   end
   if math.mod(n, 16) ~= 0 then stdout:write('\n') end
+end
+
+local function o(n) return tonumber(n, 8) end
+
+local function orflags(n, t)
+  if not t then return n end
+
+  if type(t) == 'table' then
+    return bit.bor(n, unpack(t))
+  end
+
+  return bit.bor(n, t)
 end
 
 local IS_WINDOWS = package.config:sub(1,1) == '\\'
@@ -239,10 +303,10 @@ local ZIP_VERSION_MADE = {
 }
 
 local ZIP_COMPRESSION_LEVEL = {
-  NO_COMPRESSION      = {value = zlib.NO_COMPRESSION;       flag = ZIP_FLAGS.DEFLATE_NORMAL;  method = ZIP_COMPRESSION_METHOD.STORE;};
-  BEST_SPEED          = {value = zlib.BEST_SPEED;           flag = ZIP_FLAGS.DEFLATE_FAST;    method = ZIP_COMPRESSION_METHOD.DEFLATE;};
-  BEST_COMPRESSION    = {value = zlib.BEST_COMPRESSION;     flag = ZIP_FLAGS.DEFLATE_MAXIMUM; method = ZIP_COMPRESSION_METHOD.DEFLATE;};
-  DEFAULT_COMPRESSION = {value = zlib.DEFAULT_COMPRESSION;  flag = ZIP_FLAGS.DEFLATE_NORMAL;  method = ZIP_COMPRESSION_METHOD.DEFLATE;};
+  NO_COMPRESSION      = {value = ZLIB_NO_COMPRESSION;       flag = ZIP_FLAGS.DEFLATE_NORMAL;  method = ZIP_COMPRESSION_METHOD.STORE;};
+  BEST_SPEED          = {value = ZLIB_BEST_SPEED;           flag = ZIP_FLAGS.DEFLATE_FAST;    method = ZIP_COMPRESSION_METHOD.DEFLATE;};
+  BEST_COMPRESSION    = {value = ZLIB_BEST_COMPRESSION;     flag = ZIP_FLAGS.DEFLATE_MAXIMUM; method = ZIP_COMPRESSION_METHOD.DEFLATE;};
+  DEFAULT_COMPRESSION = {value = ZLIB_DEFAULT_COMPRESSION;  flag = ZIP_FLAGS.DEFLATE_NORMAL;  method = ZIP_COMPRESSION_METHOD.DEFLATE;};
 }
 
 local ZIP_CDH_EXTRA_ID = {
@@ -316,6 +380,56 @@ local AES_MODE = {
   AES256 = 0x03,
 }
 
+-- Based on
+-- http://unix.stackexchange.com/questions/14705/the-zip-formats-external-file-attribute
+
+-- 1000|000|110100000|00000000|00100000
+-- TTTT|sst|rwxrwxrwx|00000000|00ADVSHR
+-- ^^^^|___|_________|________|________ file type as explained above
+--     |^^^|_________|________|________ setuid, setgid, sticky
+--     |   |^^^^^^^^^|________|________ permissions
+--     |   |         |^^^^^^^^|________ This is the "lower-middle byte" your post mentions
+--     |   |         |        |^^^^^^^^ DOS attribute bits
+
+-- Extra file attributes for Unix
+local NIX_FILE_ATTR = {
+  IFIFO  = bit.lshift(o"010000", 16);  -- /* named pipe (fifo) */
+  IFCHR  = bit.lshift(o"020000", 16);  -- /* character special */
+  IFDIR  = bit.lshift(o"040000", 16);  -- /* directory */
+  IFBLK  = bit.lshift(o"060000", 16);  -- /* block special */
+  IFREG  = bit.lshift(o"100000", 16);  -- /* regular */
+  IFLNK  = bit.lshift(o"120000", 16);  -- /* symbolic link */
+  IFSOCK = bit.lshift(o"140000", 16);  -- /* socket */
+
+  ISUID  = bit.lshift(o"004000", 16);  -- /* set user id on execution */
+  ISGID  = bit.lshift(o"002000", 16);  -- /* set group id on execution */
+  ISTXT  = bit.lshift(o"001000", 16);  -- /* sticky bit */
+  IRWXU  = bit.lshift(o"000700", 16);  -- /* RWX mask for owner */
+  IRUSR  = bit.lshift(o"000400", 16);  -- /* R for owner */
+  IWUSR  = bit.lshift(o"000200", 16);  -- /* W for owner */
+  IXUSR  = bit.lshift(o"000100", 16);  -- /* X for owner */
+  IRWXG  = bit.lshift(o"000070", 16);  -- /* RWX mask for group */
+  IRGRP  = bit.lshift(o"000040", 16);  -- /* R for group */
+  IWGRP  = bit.lshift(o"000020", 16);  -- /* W for group */
+  IXGRP  = bit.lshift(o"000010", 16);  -- /* X for group */
+  IRWXO  = bit.lshift(o"000007", 16);  -- /* RWX mask for other */
+  IROTH  = bit.lshift(o"000004", 16);  -- /* R for other */
+  IWOTH  = bit.lshift(o"000002", 16);  -- /* W for other */
+  IXOTH  = bit.lshift(o"000001", 16);  -- /* X for other */
+  ISVTX  = bit.lshift(o"001000", 16);  -- /* save swapped text even after use */
+}
+
+-- Extra file attributes for Windows/DOS/FAT32
+local DOS_FILE_ATTR = {
+  NORMAL = 0x00; -- Normal file
+  RDONLY = 0x01; -- Read-only file
+  HIDDEN = 0x02; -- Hidden file
+  SYSTEM = 0x04; -- System file
+  VOLID  = 0x08; -- Volume ID
+  SUBDIR = 0x10; -- Subdirectory
+  ARCH   = 0x20; -- File changed since last archive
+}
+
 local function zip_make_extra(HID, data)
   return stream_converter.pack(STRUCT_CDH_EXTRA_RECORD, HID, #data, data)
 end
@@ -323,7 +437,6 @@ end
 local function zip_extra_pack(HID, struct, ...)
   return zip_make_extra(HID, struct_pack(struct, ...))
 end
-
 
 -------------------------------------------------------------
 -- streams
@@ -451,8 +564,49 @@ end
 -- @tfield number mtime last modification time. If nil then os.clock used.
 -- @tfield number ctime
 -- @tfield number atime
--- @tfield number exattrib on Windows it can be result of GetFileAttributes
+-- @tfield number|table exattrib on Windows it can be result of GetFileAttributes. Also it can be array of flags.
+-- @tfield string platform
 -- @tfield ?string data file content
+--
+-- @see DOS_FILE_ATTR
+-- @see NIX_FILE_ATTR
+
+--- Extra file attributes for Unix
+-- @table NIX_FILE_ATTR
+-- @field IFIFO  named pipe (fifo)
+-- @field IFCHR  character special
+-- @field IFDIR  directory
+-- @field IFBLK  block special
+-- @field IFREG  regular
+-- @field IFLNK  symbolic link
+-- @field IFSOCK socket
+-- @field ISUID  set user id on execution
+-- @field ISGID  set group id on execution
+-- @field ISTXT  sticky bit
+-- @field IRWXU  RWX mask for owner
+-- @field IRUSR  R for owner
+-- @field IWUSR  W for owner
+-- @field IXUSR  X for owner
+-- @field IRWXG  RWX mask for group
+-- @field IRGRP  R for group
+-- @field IWGRP  W for group
+-- @field IXGRP  X for group
+-- @field IRWXO  RWX mask for other
+-- @field IROTH  R for other
+-- @field IWOTH  W for other
+-- @field IXOTH  X for other
+-- @field ISVTX  save swapped text even after use
+
+--- Extra file attributes for Windows/DOS/FAT32
+-- @table DOS_FILE_ATTR
+-- @field NORMAL Normal file
+-- @field RDONLY Read-only file
+-- @field HIDDEN Hidden file
+-- @field SYSTEM System file
+-- @field VOLID  Volume ID
+-- @field SUBDIR Subdirectory
+-- @field ARCH   File changed since last archive
+
 
 ---
 -- @type ZipWriter 
@@ -519,25 +673,25 @@ function ZipWriter:open_writer(writer, seek)
   return self
 end
 
----
+--
 -- @local
 function ZipWriter:str2utf8(str)
   return (self.private_.use_utf8 and toutf8 or todos)(str)
 end
 
----
+--
 -- @local
 function ZipWriter:use_utf8()
   return self.private_.use_utf8
 end
 
----
+--
 -- @local
 function ZipWriter:use_zip64()
   return self.private_.use_zip64
 end
 
----
+--
 -- @local
 function ZipWriter:seek(...)
   local seek = self.private_.seek
@@ -545,20 +699,20 @@ function ZipWriter:seek(...)
   return seek(...)
 end
 
----
+--
 -- @local
 function ZipWriter:seekable()
   return self:seek('cur', 0) and true
 end
 
----
+--
 -- @local
 function ZipWriter:set_pos(pos)
   self.private_.pos = pos
   return self:seek("set", pos)
 end
 
----
+--
 -- @local
 function ZipWriter:get_pos()
   local pos = self:seek("cur", 0)
@@ -566,14 +720,14 @@ function ZipWriter:get_pos()
   return pos or self.private_.pos
 end
 
----
+--
 -- @local
 function ZipWriter:write_(str)
   self.private_.writer(str)
   self.private_.pos = self.private_.pos + #str
 end
 
----
+--
 -- @local
 function ZipWriter:write_fmt_(...)
   return self:write_(struct_pack(...))
@@ -584,6 +738,7 @@ end
 -- @tparam FILE_DESCRIPTION fileDesc
 -- @tparam ?callable reader must return nil on end of data
 -- @tparam ?string comment
+-- @see FILE_DESCRIPTION
 function ZipWriter:write(
   fileName, fileDesc,
   reader, comment
@@ -632,9 +787,18 @@ function ZipWriter:write(
   if use_aes then
     ver_made = ZIP_VERSION_EXTRACT["6.3"] -- @encrypt 7z do this
   else 
-    ver_made = IS_WINDOWS and ZIP_VERSION_EXTRACT["2.0"] or ZIP_VERSION_EXTRACT["2.0"]
+    ver_made = ZIP_VERSION_EXTRACT["2.0"]
   end
-  ver_made   = bit.bor( ver_made, IS_WINDOWS and ZIP_VERSION_MADE.FAT32 or ZIP_VERSION_MADE.UNIX )
+
+  local platform_made = fileDesc.platform
+  if not platform_made then
+    platform_made = IS_WINDOWS and 'fat32' or 'unix'
+  elseif platform_made:lower() == 'windows' then
+    platform_made = 'fat32' -- for compatability
+  end
+  platform_made = ZIP_VERSION_MADE[platform_made:upper()] or ZIP_VERSION_MADE.UNIX
+
+  ver_made = bit.bor( ver_made, platform_made )
 
   if fileDesc.isfile then
     flags = bit.bor(flags, level.flag)
@@ -681,9 +845,11 @@ function ZipWriter:write(
   size   = 0
   csize  = 0
 
+  local reader_error -- error from reader (e.g. access error to file)
   if fileDesc.isfile then
     -- create stream for file data
     local stream = ZipWriter_as_stream(self)
+    if use_aes then stream = encrypt:stream(stream, fileDesc) end
 
     if fileDesc.data then 
       local data = fileDesc.data
@@ -707,11 +873,8 @@ function ZipWriter:write(
         cdata = data
       end
 
-      if use_aes then stream = encrypt:stream(stream, fileDesc) end
-
       stream:write(cdata)
     else -- use stream
-      if use_aes then stream = encrypt:stream(stream, fileDesc) end
       if method == ZIP_COMPRESSION_METHOD.DEFLATE then
         stream = zip_stream(stream, level.value, method)
       else assert(method == ZIP_COMPRESSION_METHOD.STORE) end
@@ -723,6 +886,7 @@ function ZipWriter:write(
         size = size + #chunk
         chunk, ctx = reader(ctx)
       end
+      reader_error = ctx
     end
 
     csize = stream:close()
@@ -762,7 +926,7 @@ function ZipWriter:write(
     end
   end
 
-  if IS_WINDOWS then
+  if IS_WINDOWS or (fileDesc.platform and (fileDesc.platform:lower() == 'windows')) then
     local m,a,c = fileDesc.mtime,fileDesc.atime,fileDesc.ctime
     if time2filetime and m and a and c then
       local m,a,c = time2filetime(m),time2filetime(a),time2filetime(c)
@@ -795,10 +959,13 @@ function ZipWriter:write(
     ZIP_SIG.CFH,ver_made,version, flags, method,
     fileDesc_mtime,crc,csize,size,
     #utfpath, #cdextra, #utfcomment,
-    0, inattrib, fileDesc.exattrib or 0x00, offset - self.private_.begin_pos, -- disk number start
+    0, inattrib, orflags(0x00, fileDesc.exattrib), offset - self.private_.begin_pos, -- disk number start
     utfpath, cdextra, utfcomment
   )
   table.insert(self.private_.headers, cdh)
+
+  if reader_error then return nil, reader_error end
+
   return true
 end
 
@@ -865,8 +1032,15 @@ M.COMPRESSION_LEVEL = setmetatable({
   end
 });
 
+M.NIX_FILE_ATTR = NIX_FILE_ATTR
+
+M.DOS_FILE_ATTR = DOS_FILE_ATTR
+
 --- Create new `ZipWriter` object
--- @tparam table {utf8 = false, zip64 = false, level = DEFAULT}
+--
+-- @tparam table options {utf8 = false, zip64 = false, level = DEFAULT}
+--
+-- @see COMPRESSION_LEVEL
 function M.new(...)
   local t = ZipWriter:new(...)
   return t

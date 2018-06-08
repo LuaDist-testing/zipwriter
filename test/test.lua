@@ -1,3 +1,7 @@
+pcall(require, "luacov")
+
+local HAS_RUNNER = not not lunit
+
 local base64    = require "base64"
 
 function DUMP(lvl, res)
@@ -19,13 +23,16 @@ function LOAD(fname)
 end
 
 local ZipWriter = require "ZipWriter"
-local memfile   = require "memoryfile"
+local zutils    = require "ZipWriter.utils"
 local lunit     = require "lunit"
 local tutils    = require "utils"
 local TEST_CASE = tutils.TEST_CASE
 local skip      = tutils.skip
+local Stream    = tutils.Stream
+local write_file= tutils.write_file
+local test_zip  = tutils.test_zip
 
-local function prequire(m) 
+local function prequire(m)
   local ok, err = pcall(require, m) 
   if not ok then return nil, err end
   return err
@@ -51,8 +58,35 @@ local fileDesc = {
   isdir    = false,
   -- lfs.attributes('modification') 
   mtime    = 1348048902 - 1, -- -1 - Is this bug in winrar?
-  exattrib = 32, -- get from GetFileAttributesA
+  exattrib = {ZipWriter.DOS_FILE_ATTR.ARCH},
+  platform = 'windows',
 }
+
+local DELTA do
+  local MY_DELTA  = 14400
+  local d1 = os.date("*t", fileDesc.mtime)
+  d1.isdst = false
+  local t1 = os.time(d1)
+  local t2 = os.time(os.date("!*t", fileDesc.mtime))
+  local SYS_DELTA = os.difftime(t1, t2)
+  DELTA = MY_DELTA - SYS_DELTA
+end
+
+fileDesc.mtime = fileDesc.mtime + DELTA
+
+local _ENV = TEST_CASE'ZipWriter utils' do
+
+function test_date()
+  local t = assert_table(os.date("*t", fileDesc.mtime))
+  assert_equal(2012, t.year  )
+  assert_equal(09,   t.month )
+  assert_equal(19,   t.day   )
+  assert_equal(01,   t.min   )
+  assert_equal(41,   t.sec   )
+  assert_equal(14,   t.hour  )
+end
+
+end
 
 local _ENV = TEST_CASE'ZipWriter read data' do
 
@@ -64,8 +98,8 @@ function teardown()
   fileDesc.data = nil
 end
 
-local function Make(lvl)
-  local out    = memfile.open("", "wb")
+local function Make(lvl) return function()
+  local out = Stream:new()
 
   local writer = ZipWriter.new{
     utf8 = false;
@@ -76,22 +110,20 @@ local function Make(lvl)
   writer:close()
 
   local res = base64.encode( tostring(out) )
-  assert( res == ETALON[ lvl:upper() ] )
-end
+  assert_equal( ETALON[ lvl:upper() ], res )
+end end
 
-function test_()
-  Make('NO')
-  Make('DEFAULT')
-  Make('SPEED')
-  Make('BEST')
-end
+test_no      = Make('NO')
+test_default = Make('DEFAULT')
+test_speed   = Make('SPEED')
+test_best    = Make('BEST')
 
 end
 
 local _ENV = TEST_CASE'ZipWriter reader' do
 
-local function Make(lvl)
-  local out    = memfile.open("", "wb")
+local function Make(lvl) return function()
+  local out = Stream:new()
   -- local out    = io.open(".\\out.zip", "wb")
   
   local function reader(i)
@@ -110,22 +142,62 @@ local function Make(lvl)
   writer:close()
 
   local res = base64.encode( tostring(out) )
-  assert( res == ETALON[ lvl:upper() ] )
+  assert_equal( ETALON[ lvl:upper() ], res )
+end end
+
+test_no      = Make('NO')
+test_default = Make('DEFAULT')
+test_speed   = Make('SPEED')
+test_best    = Make('BEST')
+
 end
 
-function test_()
-  Make('NO')
-  Make('DEFAULT')
-  Make('SPEED')
-  Make('BEST')
+local _ENV = TEST_CASE'ZipWriter reader interface' do
+
+function test_context()
+  local out = Stream:new()
+  local writer = ZipWriter.new()
+  writer:open_stream(out)
+
+  local function make_reader()
+    local ctx = {}
+    local i = 0
+    return function(o)
+      if i == 0 then
+        i = 1
+        assert_nil(o)
+        return "data", ctx
+      end
+      assert_equal(ctx, o)
+    end
+  end
+
+  assert_true(writer:write('test.txt', fileDesc, make_reader()))
+  assert_equal(1, writer:close())
+end
+
+function test_error()
+  local out = Stream:new()
+  local writer = ZipWriter.new()
+  writer:open_stream(out)
+
+  local ERR = {}
+
+  local function reader()
+    return nil, ERR
+  end
+
+  local ok, err = assert_nil(writer:write('test.txt', fileDesc, reader))
+  assert_equal(ERR, err)
+  assert_equal(1, writer:close())
 end
 
 end
 
 local _ENV = TEST_CASE'ZipWriter sink' do
 
-local function Make(lvl)
-  local out    = memfile.open("", "wb")
+local function Make(lvl) return function()
+  local out = Stream:new()
 
   local writer = ZipWriter.new{
     utf8 = false;
@@ -139,15 +211,13 @@ local function Make(lvl)
   writer:close()
   
   local res = base64.encode( tostring(out) )
-  assert( res == ETALON[ lvl:upper() ] )
-end
+  assert_equal( ETALON[ lvl:upper() ], res )
+end end
 
-function test_()
-  Make('NO')
-  Make('DEFAULT')
-  Make('SPEED')
-  Make('BEST')
-end
+test_no      = Make('NO')
+test_default = Make('DEFAULT')
+test_speed   = Make('SPEED')
+test_best    = Make('BEST')
 
 end
 
@@ -160,7 +230,7 @@ local ETALON = { -- testd with winrar 3.93 / 7-Zip 9.20.04 alpha
   BEST    = [[UEsDBBQACgAIADVwM0EAAAAAAAAAAAAAAAAIAAAAdGVzdC50eHQzNMQEvFxGWAAAUEsHCDrMPj0KAAAAKgAAAFBLAQIUABQACgAIADVwM0E6zD49CgAAACoAAAAIAAAAAAAAAAEAIAAAAAAAAAB0ZXN0LnR4dFBLBQYAAAAAAQABADYAAABAAAAAAAA=]];
 }
 
-local function Make(lvl)
+local function Make(lvl) return function()
   local data = fileDesc.data
   local function reader(i)
     i = i or 1
@@ -189,15 +259,13 @@ local function Make(lvl)
   local res = table.concat(RES)
 
   res = base64.encode( res )
-  assert( res == ETALON[ lvl:upper() ] )
-end
+  assert_equal( ETALON[ lvl:upper() ], res )
+end end
 
-function test_()
-  Make('NO')
-  Make('DEFAULT')
-  Make('SPEED')
-  Make('BEST')
-end
+test_no      = Make('NO')
+test_default = Make('DEFAULT')
+test_speed   = Make('SPEED')
+test_best    = Make('BEST')
 
 end
 
@@ -218,8 +286,8 @@ function teardown()
   fileDesc.data = nil
 end
 
-local function Make(lvl)
-  local out    = memfile.open("", "wb")
+local function Make(lvl) return function()
+  local out = Stream:new()
 
   local writer = ZipWriter.new{
     utf8 = false;
@@ -231,15 +299,13 @@ local function Make(lvl)
   writer:close()
 
   local res = base64.encode( tostring(out) )
-  assert( res == ETALON[ lvl:upper() ] )
-end
+  assert_equal( ETALON[ lvl:upper() ], res )
+end end
 
-function test_()
-  Make('NO')
-  Make('DEFAULT')
-  Make('SPEED')
-  Make('BEST')
-end
+test_no      = Make('NO')
+test_default = Make('DEFAULT')
+test_speed   = Make('SPEED')
+test_best    = Make('BEST')
 
 end
 
@@ -260,8 +326,8 @@ function teardown()
   fileDesc.data = nil
 end
 
-local function Make(lvl)
-  local out    = memfile.open("", "wb")
+local function Make(lvl) return function()
+  local out = Stream:new()
 
   local writer = ZipWriter.new{
     utf8  = false;
@@ -273,15 +339,13 @@ local function Make(lvl)
   writer:close()
 
   local res = base64.encode( tostring(out) )
-  assert( res == ETALON[ lvl:upper() ], lvl )
-end
+  assert_equal( ETALON[ lvl:upper() ], res )
+end end
 
-function test_()
-  Make('NO')
-  Make('DEFAULT')
-  Make('SPEED')
-  Make('BEST')
-end
+test_no      = Make('NO')
+test_default = Make('DEFAULT')
+test_speed   = Make('SPEED')
+test_best    = Make('BEST')
 
 end
 
@@ -298,10 +362,13 @@ local fileDesc = {
   mtime   = 1348048902,
   ctime   = 1366112737,
   atime   = 1366378701,
-  exattrib = 32,
+  exattrib = {ZipWriter.DOS_FILE_ATTR.ARCH},
+  platform = 'windows',
 }
 
 local _ENV = TEST_CASE'ZipWriter AES-256' do
+
+local fname = "./test.zip"
 
 local ETALON = {
   -- identical with 7z, but ntfs_extra field
@@ -314,10 +381,11 @@ end
 
 function teardown()
   fileDesc.data = nil
+  os.remove(fname)
 end
 
-local function Make(lvl)
-  local out    = memfile.open("", "wb")
+local function Make(lvl) return function()
+  local out = Stream:new()
 
   local writer = ZipWriter.new{
     utf8 = false;
@@ -333,19 +401,36 @@ local function Make(lvl)
   writer:write('test.txt', fileDesc)
   writer:close()
 
-  local res = base64.encode( tostring(out) )
-  assert( res == ETALON[ lvl:upper() ] )
+  if DELTA == 0 and ETALON[ lvl:upper() ] then
+    local res = base64.encode( tostring(out) )
+    assert_equal( ETALON[ lvl:upper() ], res )
+  else
+    assert_true(write_file(fname, tostring(out)))
+    assert_true(test_zip(fname, '123456'))
+  end
+end end
+
+test_no      = Make('NO')
+test_default = Make('DEFAULT')
+test_speed   = Make('SPEED')
+test_best    = Make('BEST')
+
 end
 
-function test_()
-  Make('NO')
-  -- Make('DEFAULT')
-  -- Make('SPEED')
-  -- Make('BEST')
+end
+
+local AesEncrypt = prequire"ZipWriter.encrypt.aes.AesFileEncrypt"
+
+if AesEncrypt then
+
+local _ENV = TEST_CASE'AesEncrypt self_test' do
+
+function test()
+  AesEncrypt.self_test()
 end
 
 end
 
 end
 
-lunit.run()
+if not HAS_RUNNER then lunit.run() end
