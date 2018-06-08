@@ -1,15 +1,24 @@
-package = "ZipWriter"
-version = "scm-0"
+-- This file was automatically generated for the LuaDist project.
+
+package = "zipwriter"
+version = "0.1.1-1"
+-- LuaDist source
 source = {
-  url = "https://github.com/moteus/ZipWriter/archive/master.zip",
-  dir = "ZipWriter-master",
+  tag = "0.1.1-1",
+  url = "git://github.com/LuaDist-testing/zipwriter.git"
 }
+-- Original source
+-- source = {
+--   url = "https://github.com/moteus/ZipWriter/archive/v0.1.1.zip",
+--   dir = "ZipWriter-0.1.1",
+-- }
 
 description = {
   summary = "Library for creating ZIP archive for Lua 5.1/5.2",
   homepage = "https://github.com/ZipWriter",
   detailed = [[This package provides a library to create zip archives.
-  This library support non seekable streams (e.g. socket), ZIP64 format and AES encrypting.
+  This library support non seekable streams (e.g. socket), ZIP64 format and
+AES encrypting.
   ]],
   license  = "MIT/X11",
 }
@@ -44,6 +53,3 @@ build = {
     ["ZipWriter.encrypt.aes"]      = "lua/ZipWriter/encrypt/aes.lua",
   }
 }
-
-
-

@@ -1,23 +1,15 @@
--- This file was automatically generated for the LuaDist project.
-
-package = "zipwriter"
-version = "0.1.0-1"
--- LuaDist source
+package = "ZipWriter"
+version = "0.1.1-1"
 source = {
-  tag = "0.1.0-1",
-  url = "git://github.com/LuaDist-testing/zipwriter.git"
+  url = "https://github.com/moteus/ZipWriter/archive/v0.1.1.zip",
+  dir = "ZipWriter-0.1.1",
 }
--- Original source
--- source = {
---   url = "https://github.com/moteus/ZipWriter/archive/v0.1.0.zip",
---   dir = "ZipWriter-0.1.0",
--- }
 
 description = {
   summary = "Library for creating ZIP archive for Lua 5.1/5.2",
-  homepage = "https://github.com/moteus/ZipWriter",
+  homepage = "https://github.com/ZipWriter",
   detailed = [[This package provides a library to create zip archives.
-  This library support non seekable streams (e.g. socket) and ZIP64 format.
+  This library support non seekable streams (e.g. socket), ZIP64 format and AES encrypting.
   ]],
   license  = "MIT/X11",
 }
@@ -27,8 +19,9 @@ dependencies = {
   "struct >= 1.2",
   "bit32",
   "lzlib",
-  -- "lua-iconv >= 7.0",  -- optional
-  -- "alien >= 0.7.0",    -- optional on windows
+  -- "luacrypto >= 0.3.0",  -- optional to support aes
+  -- "lua-iconv >= 7.0",    -- optional
+  -- "alien >= 0.7.0",      -- optional on windows
 }
 
 build = {
@@ -42,10 +35,15 @@ build = {
       }
     }
   },
+
   modules = {
     ["ZipWriter" ]                 = "lua/ZipWriter.lua",
     ["ZipWriter.binary_converter"] = "lua/ZipWriter/binary_converter.lua",
     ["ZipWriter.charset"]          = "lua/ZipWriter/charset.lua",
     ["ZipWriter.utils"]            = "lua/ZipWriter/utils.lua",
+    ["ZipWriter.encrypt.aes"]      = "lua/ZipWriter/encrypt/aes.lua",
   }
 }
+
+
+
