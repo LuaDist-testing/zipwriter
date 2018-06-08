@@ -1,17 +1,9 @@
--- This file was automatically generated for the LuaDist project.
-
-package = "zipwriter"
-version = "0.1.3-1"
--- LuaDist source
+package = "ZipWriter"
+version = "0.1.4-1"
 source = {
-  tag = "0.1.3-1",
-  url = "git://github.com/LuaDist-testing/zipwriter.git"
+  url = "https://github.com/moteus/ZipWriter/archive/v0.1.4.zip",
+  dir = "ZipWriter-0.1.4",
 }
--- Original source
--- source = {
---   url = "https://github.com/moteus/ZipWriter/archive/v0.1.3.zip",
---   dir = "ZipWriter-0.1.3",
--- }
 
 description = {
   summary = "Library for creating ZIP archive for Lua 5.1/5.2",
@@ -24,9 +16,9 @@ description = {
 
 dependencies = {
   "lua >= 5.1",
-  "struct >= 1.2",
   "lzlib",
-  -- "bit32",
+  "struct >= 1.2",       -- For Lua < 5.3
+  -- "bit32",               -- Lua 5.1 only
   -- "aesfileencrypt",      -- optional fast aes encryption
   -- "luacrypto >= 0.3.0",  -- optional to support aes
   -- "lua-iconv >= 7.0",    -- optional
@@ -49,10 +41,12 @@ build = {
     ["ZipWriter" ]                           = "lua/ZipWriter.lua",
     ["ZipWriter.binary_converter"]           = "lua/ZipWriter/binary_converter.lua",
     ["ZipWriter.charset"]                    = "lua/ZipWriter/charset.lua",
+    ["ZipWriter.bit"]                        = "lua/ZipWriter/bit.lua",
     ["ZipWriter.utils"]                      = "lua/ZipWriter/utils.lua",
     ["ZipWriter.encrypt.aes"]                = "lua/ZipWriter/encrypt/aes.lua",
     ["ZipWriter.encrypt.aes.AesFileEncrypt"] = "lua/ZipWriter/encrypt/aes/AesFileEncrypt.lua",
   }
 }
+
 
 
