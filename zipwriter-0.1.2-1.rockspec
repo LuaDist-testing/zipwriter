@@ -1,24 +1,23 @@
 -- This file was automatically generated for the LuaDist project.
 
 package = "zipwriter"
-version = "0.1.1-1"
+version = "0.1.2-1"
 -- LuaDist source
 source = {
-  tag = "0.1.1-1",
+  tag = "0.1.2-1",
   url = "git://github.com/LuaDist-testing/zipwriter.git"
 }
 -- Original source
 -- source = {
---   url = "https://github.com/moteus/ZipWriter/archive/v0.1.1.zip",
---   dir = "ZipWriter-0.1.1",
+--   url = "https://github.com/moteus/ZipWriter/archive/v0.1.2.zip",
+--   dir = "ZipWriter-0.1.2",
 -- }
 
 description = {
   summary = "Library for creating ZIP archive for Lua 5.1/5.2",
-  homepage = "https://github.com/ZipWriter",
+  homepage = "https://github.com/moteus/ZipWriter",
   detailed = [[This package provides a library to create zip archives.
-  This library support non seekable streams (e.g. socket), ZIP64 format and
-AES encrypting.
+  This library support non seekable streams (e.g. socket), ZIP64 format and AES encrypting.
   ]],
   license  = "MIT/X11",
 }
@@ -28,6 +27,7 @@ dependencies = {
   "struct >= 1.2",
   "bit32",
   "lzlib",
+  -- "aesfileencrypt",      -- optional fast aes encryption
   -- "luacrypto >= 0.3.0",  -- optional to support aes
   -- "lua-iconv >= 7.0",    -- optional
   -- "alien >= 0.7.0",      -- optional on windows
